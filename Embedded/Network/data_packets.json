@@ -1,0 +1,16 @@
+{
+    "header": {
+        "timestamp_ms": 0
+    },
+    "data": {
+        "impact_state": false,
+        "x_coord_cm": 0.0,
+        "y_coord_cm": 0.0,
+        "heartrate_BPM": 0,
+        "O2": 0 
+    },
+    "status": {
+        "record_session": true,
+        "battery_mv": 0
+    }
+}
