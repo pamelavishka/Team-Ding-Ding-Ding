@@ -35,6 +35,8 @@ app.get("/latest", (req, res) => {
 });
 
 app.post("/sensor-data", (req, res) => {
+    console.log("POST /sensor-data received:", req.body);
+
   latestData = {
     ...latestData,
     ...req.body,

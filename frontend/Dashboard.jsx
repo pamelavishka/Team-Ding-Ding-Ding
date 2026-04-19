@@ -177,6 +177,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     socket.on("sensorUpdate", (data) => {
+    console.log("FRONTEND GOT:", data);
       setLiveData((prev) => ({
         ...prev,
         ...data,
