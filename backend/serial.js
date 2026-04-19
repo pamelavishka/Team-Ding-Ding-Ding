@@ -3,7 +3,7 @@ const { ReadlineParser } = require("@serialport/parser-readline");
 const fetch = require("node-fetch"); // if needed
 
 const port = new SerialPort({
-  path: "/dev/cu.usbmodem1401",
+  path: "//dev/cu.usbmodem1301",
   baudRate: 9600,
 });
 

@@ -2,7 +2,7 @@ const { SerialPort } = require("serialport");
 const { ReadlineParser } = require("@serialport/parser-readline");
 
 const port = new SerialPort({
-  path: "/dev/cu.usbmodem1401",
+  path: "/dev/cu.usbmodem1301",
   baudRate: 9600,
 });
 
@@ -14,9 +14,9 @@ parser.on("data", async (line) => {
     console.log("Arduino:", data);
 
     const mappedData = {
-      swingForce: data.swingForceRelative ?? 0,
-      swingSpeed: data.swingSpeedRelative ?? 0,
-      swingDistance: data.swingDistanceRelative ?? 0,
+      swingForce: data.swingForce ?? 0,
+      swingSpeed: data.swingSpeed ?? 0,
+      swingDistance: data.swingDistance ?? 0,
     };
 
     const response = await fetch("http://localhost:3001/sensor-data", {

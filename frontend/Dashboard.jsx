@@ -126,7 +126,7 @@ function PaddleFace({ selectedZone, setSelectedZone }) {
           </div>
 
           <p className="muted-text">
-            This area lights up in real time when the backend sends new impact-location data.
+            This section is ready for paddle-face impact sensors once those are connected.
           </p>
         </div>
       </div>
@@ -138,25 +138,25 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState("performance");
 
   const [liveData, setLiveData] = useState({
-    heartRate: 92,
-    calories: 186,
-    swingSpeed: 37,
-    swingForce: 74,
+    heartRate: 72,
+    calories: 0,
+    swingSpeed: 0,
+    swingForce: 0,
+    swingDistance: 0,
     hitLocation: "center",
-    accuracy: 84,
-    precision: 78,
+    accuracy: 0,
+    precision: 0,
     totalSwings: 0,
   });
 
-  const [history, setHistory] = useState([
-    { t: "0", hr: 92, speed: 22 },
-    { t: "5", hr: 98, speed: 26 },
-    { t: "10", hr: 108, speed: 31 },
-    { t: "15", hr: 116, speed: 29 },
-    { t: "20", hr: 121, speed: 35 },
-    { t: "25", hr: 118, speed: 33 },
-    { t: "30", hr: 124, speed: 37 },
-  ]);
+  const [history, setHistory] = useState(
+    Array.from({ length: 12 }, (_, i) => ({
+      t: i + 1,
+      force: 0,
+      speed: 0,
+      distance: 0,
+    }))
+  );
 
   const [zoneCounts, setZoneCounts] = useState({
     center: 42,
@@ -167,50 +167,64 @@ export default function Dashboard() {
   });
 
   const [recentShots, setRecentShots] = useState([
-    { id: 1, zone: "center", force: "Medium", speed: "31 mph", result: "Clean contact" },
-    { id: 2, zone: "upper", force: "High", speed: "36 mph", result: "Slight mishit" },
-    { id: 3, zone: "center", force: "Medium", speed: "34 mph", result: "Controlled shot" },
-    { id: 4, zone: "right_edge", force: "Low", speed: "24 mph", result: "Off-center" },
+    { id: 1, zone: "center", force: "Medium", speed: "31", result: "Clean contact" },
+    { id: 2, zone: "upper", force: "High", speed: "36", result: "Slight mishit" },
+    { id: 3, zone: "center", force: "Medium", speed: "34", result: "Controlled shot" },
+    { id: 4, zone: "right_edge", force: "Low", speed: "24", result: "Off-center" },
   ]);
 
   const [selectedZone, setSelectedZone] = useState("center");
 
   useEffect(() => {
     socket.on("sensorUpdate", (data) => {
-    console.log("FRONTEND GOT:", data);
       setLiveData((prev) => ({
         ...prev,
         ...data,
       }));
 
-      setSelectedZone(data.hitLocation || "center");
+      setHistory((prev) => {
+        const last = prev[prev.length - 1] || { force: 0, speed: 0, distance: 0 };
 
-      setHistory((prev) => [
-        ...prev.slice(-19),
-        {
-          t: new Date().toLocaleTimeString(),
-          hr: data.heartRate ?? 0,
-          speed: data.swingSpeed ?? 0,
-        },
-      ]);
+        const nextForceRaw = Math.round(data.swingForce ?? last.force ?? 0);
+        const nextSpeedRaw = Math.round(data.swingSpeed ?? last.speed ?? 0);
+        const nextDistanceRaw = Math.round(data.swingDistance ?? last.distance ?? 0);
+
+        // smoothing so the graph changes more naturally
+        const nextForce = Math.round(last.force * 0.65 + nextForceRaw * 0.35);
+        const nextSpeed = Math.round(last.speed * 0.65 + nextSpeedRaw * 0.35);
+        const nextDistance = Math.round(last.distance * 0.65 + nextDistanceRaw * 0.35);
+
+        const nextPoint = {
+          t: (prev[prev.length - 1]?.t || 0) + 1,
+          force: nextForce,
+          speed: nextSpeed,
+          distance: nextDistance,
+        };
+
+        return [...prev.slice(-11), nextPoint];
+      });
 
       if (data.hitLocation) {
+        setSelectedZone(data.hitLocation);
+
         setZoneCounts((prev) => ({
           ...prev,
           [data.hitLocation]: (prev[data.hitLocation] || 0) + 1,
         }));
 
         setRecentShots((prev) => {
+          const forceLabel =
+            (data.swingForce ?? 0) >= 70
+              ? "High"
+              : (data.swingForce ?? 0) >= 35
+              ? "Medium"
+              : "Low";
+
           const nextShot = {
             id: (prev[0]?.id || 0) + 1,
             zone: data.hitLocation,
-            force:
-              data.swingForce >= 85
-                ? "High"
-                : data.swingForce >= 60
-                ? "Medium"
-                : "Low",
-            speed: `${data.swingSpeed ?? 0} mph`,
+            force: forceLabel,
+            speed: `${Math.round(data.swingSpeed ?? 0)}`,
             result: data.hitLocation === "center" ? "Clean contact" : "Off-center",
           };
 
@@ -233,20 +247,29 @@ export default function Dashboard() {
   ];
 
   const radarData = [
-    { metric: "Accuracy", value: liveData.accuracy || 0 },
-    { metric: "Precision", value: liveData.precision || 0 },
-    { metric: "Power", value: Math.min(liveData.swingForce || 0, 100) },
+    { metric: "Force", value: Math.round(liveData.swingForce || 0) },
+    { metric: "Speed", value: Math.round(liveData.swingSpeed || 0) },
+    { metric: "Distance", value: Math.round(liveData.swingDistance || 0) },
+    { metric: "Accuracy", value: Math.round(liveData.accuracy || 0) },
+    { metric: "Precision", value: Math.round(liveData.precision || 0) },
     { metric: "Control", value: liveData.hitLocation === "center" ? 88 : 70 },
-    { metric: "Consistency", value: 69 },
-    { metric: "Reaction", value: 72 },
   ];
 
   const coachingTip = useMemo(() => {
-    if (liveData.hitLocation === "center") {
-      return "Most recent contact is on the sweet spot. Keep the paddle face stable and repeat that timing.";
+    if ((liveData.swingSpeed || 0) > 70) {
+      return "Swing speed is high right now. Focus on repeatable control so the motion stays consistent.";
     }
-    return "Off-center contact is showing up in this session. Focus on timing and paddle alignment to improve precision.";
-  }, [liveData.hitLocation]);
+
+    if ((liveData.swingForce || 0) > 70) {
+      return "Force is spiking. Make sure your swing stays smooth instead of getting tense.";
+    }
+
+    if ((liveData.accuracy || 0) > 80) {
+      return "Accuracy is looking strong. Keep repeating the same contact timing.";
+    }
+
+    return "Motion input is coming through. As other sensors are added, this dashboard will combine all paddle and player data live.";
+  }, [liveData.swingSpeed, liveData.swingForce, liveData.accuracy]);
 
   return (
     <div className="page">
@@ -255,7 +278,7 @@ export default function Dashboard() {
           <div>
             <h1 className="page-title">Smart Pickleball Paddle Dashboard</h1>
             <p className="page-subtitle">
-              Real-time tracking for contact accuracy, swing performance, and player biometrics.
+              Real-time tracking for paddle motion, contact quality, and player performance.
             </p>
           </div>
 
@@ -268,23 +291,23 @@ export default function Dashboard() {
         <div className="metrics-grid">
           <MetricCard
             title="Heart Rate"
-            value={`${liveData.heartRate} bpm`}
-            subtitle="Current handle sensor reading"
+            value={`${Math.round(liveData.heartRate || 0)} bpm`}
+            subtitle="Future biometric input"
           />
           <MetricCard
             title="Swing Speed"
-            value={`${liveData.swingSpeed} mph`}
-            subtitle="Fastest swing this session"
+            value={`${Math.round(liveData.swingSpeed || 0)}`}
+            subtitle="Accelerometer input"
           />
           <MetricCard
             title="Accuracy"
-            value={`${liveData.accuracy}%`}
-            subtitle="Center-zone contact score"
+            value={`${Math.round(liveData.accuracy || 0)}%`}
+            subtitle="Future paddle-face input"
           />
           <MetricCard
             title="Calories"
-            value={`${liveData.calories} kcal`}
-            subtitle="Estimated session burn"
+            value={`${Math.round(liveData.calories || 0)} kcal`}
+            subtitle="Future biometric estimate"
           />
         </div>
 
@@ -304,16 +327,16 @@ export default function Dashboard() {
           <div className="two-col-grid">
             <div className="card">
               <div className="card-header">
-                <h2>Heart Rate Over Time</h2>
+                <h2>Force Over Time</h2>
               </div>
               <div className="chart-wrap">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={history}>
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="t" />
-                    <YAxis />
+                    <XAxis dataKey="t" hide />
+                    <YAxis domain={[0, 100]} />
                     <Tooltip />
-                    <Line type="monotone" dataKey="hr" strokeWidth={2} />
+                    <Line type="monotone" dataKey="force" strokeWidth={2} dot={false} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -321,18 +344,68 @@ export default function Dashboard() {
 
             <div className="card">
               <div className="card-header">
-                <h2>Swing Speed Trend</h2>
+                <h2>Speed Over Time</h2>
               </div>
               <div className="chart-wrap">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={history}>
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="t" />
-                    <YAxis />
+                    <XAxis dataKey="t" hide />
+                    <YAxis domain={[0, 100]} />
                     <Tooltip />
-                    <Line type="monotone" dataKey="speed" strokeWidth={2} />
+                    <Line type="monotone" dataKey="speed" strokeWidth={2} dot={false} />
                   </LineChart>
                 </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="card-header">
+                <h2>Distance Over Time</h2>
+              </div>
+              <div className="chart-wrap">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={history}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="t" hide />
+                    <YAxis domain={[0, 100]} />
+                    <Tooltip />
+                    <Line type="monotone" dataKey="distance" strokeWidth={2} dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="card-header">
+                <h2>Motion Summary</h2>
+              </div>
+              <div className="card-body">
+                <div className="zone-stats-box">
+                  <div className="zone-stat">
+                    <div className="zone-stat-row">
+                      <span>Force</span>
+                      <span>{Math.round(liveData.swingForce || 0)}</span>
+                    </div>
+                    <ProgressBar value={Math.round(liveData.swingForce || 0)} />
+                  </div>
+
+                  <div className="zone-stat">
+                    <div className="zone-stat-row">
+                      <span>Speed</span>
+                      <span>{Math.round(liveData.swingSpeed || 0)}</span>
+                    </div>
+                    <ProgressBar value={Math.round(liveData.swingSpeed || 0)} />
+                  </div>
+
+                  <div className="zone-stat">
+                    <div className="zone-stat-row">
+                      <span>Distance</span>
+                      <span>{Math.round(liveData.swingDistance || 0)}</span>
+                    </div>
+                    <ProgressBar value={Math.round(liveData.swingDistance || 0)} />
+                  </div>
+                </div>
               </div>
             </div>
           </div>
